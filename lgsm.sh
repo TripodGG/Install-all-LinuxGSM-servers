@@ -1,4 +1,127 @@
 #!/bin/bash
+
+# Project: Linux Game Server Management automation
+# Author: TripodGG
+# License: MIT License, Copyright (c) 2024 TripodGG
+# Purpose: Add additional functionality to the existing LinuxGSM.sh script. Automatically detect the host OS, prompt to create a new user (if the user wants to), download the required dependencies, prompt the user for which game server they want to install, download the associated lgsm script, and then automatically launch the installer for that game server.
+
+# Function to check the operating system and version
+check_os() {
+    if [ -f "/etc/os-release" ]; then
+        source /etc/os-release
+        OS_NAME="${ID}"
+        OS_VERSION="${VERSION_ID}"
+
+        echo "Detected operating system: ${OS_NAME} ${OS_VERSION}"
+
+        # Prompt for confirmation
+        read -p "Is this correct? (y/n): " confirm
+        if [[ "${confirm,,}" != "y" && "${confirm,,}" != "yes" ]]; then
+            echo "Aborting script."
+            exit 1
+        fi
+    else
+        echo "Unable to identify the operating system. Aborting script."
+        exit 1
+    fi
+}
+
+# Function to prompt the user to create a new user
+new_user() {
+	read -p "Would you like to create a new user to run this game server? (y/n): " create_new_user
+
+	if [[ "${create_new_user,,}" == "yes" || "${create_new_user,,}" == "y" ]]; then
+		read -p "Enter the username for the new user: " new_username
+		adduser "${new_username}"
+    
+		# Add the new user to the sudo group
+		usermod -aG sudo "${new_username}"
+
+		# Copy the script to the new user's home directory
+		cp "$0" "/home/${new_username}/"
+    
+		# Continue with the script as the new user
+		su - "${new_username}" -c "bash $0"
+	fi
+}
+
+# Function to install dependencies based on OS
+install_dependencies() {
+    case "${OS_NAME}" in
+        "ubuntu")
+            case "${OS_VERSION}" in
+                "20.04")
+                    sudo dpkg --add-architecture i386
+                    sudo apt update
+                    sudo apt install curl wget file tar bzip2 gzip unzip bsdmainutils python3 util-linux ca-certificates binutils bc jq tmux netcat lib32gcc1 lib32stdc++6 libsdl2-2.0-0:i386 steamcmd telnet expect libxml2-utils
+                    ;;
+                "22.04")
+                    sudo dpkg --add-architecture i386
+                    sudo apt update
+                    sudo apt install curl wget file tar bzip2 gzip unzip bsdmainutils python3 util-linux ca-certificates binutils bc jq tmux netcat lib32gcc-s1 lib32stdc++6 libsdl2-2.0-0:i386 steamcmd telnet expect libxml2-utils
+                    ;;
+                *)
+                    echo "Unsupported Ubuntu version."
+                    exit 1
+                    ;;
+            esac
+            ;;
+        "debian")
+            case "${OS_VERSION}" in
+                "10")
+                    sudo dpkg --add-architecture i386
+                    sudo apt update
+                    sudo apt install curl wget file tar bzip2 gzip unzip bsdmainutils python3 util-linux ca-certificates binutils bc jq tmux netcat lib32gcc1 lib32stdc++6 lib32z1 telnet expect libxml2-utils
+                    ;;
+                "11" | "bullseye" | "12" | "bookworm" | "sid")
+                    sudo dpkg --add-architecture i386
+                    sudo apt update
+                    sudo apt install curl wget file tar bzip2 gzip unzip bsdmainutils python3 util-linux ca-certificates binutils bc jq tmux netcat lib32gcc-s1 lib32stdc++6 lib32z1 telnet expect libxml2-utils
+                    ;;
+                *)
+                    echo "Unsupported Debian version."
+                    exit 1
+                    ;;
+            esac
+            ;;
+        "centos" | "fedora" | "rhel")
+            sudo yum install epel-release
+            sudo yum install curl wget tar bzip2 gzip unzip python3 binutils bc jq tmux glibc.i686 libstdc++ libstdc++.i686 telnet expect libxml2
+            ;;
+        *)
+            echo "Unsupported operating system."
+            exit 1
+            ;;
+    esac
+	
+	# Prompt the user to choose a game server
+    echo "Available game servers:"
+    tail -n +1 "${serverlist}" | awk -F "," '{print $2 "\t" $3}'
+    read -p "Enter the name of the game server you want to install: " selected_game_server
+
+    # Set auto_install_game_server variable based on user's choice
+    auto_install_game_server="${selected_game_server}"
+
+    # Run the install command for the chosen game server
+    echo "Installing ${auto_install_game_server}..."
+    ./${auto_install_game_server} install
+}
+
+# Check the operating system
+check_os
+
+# Prompt to create a new user
+new_user
+
+# Install dependencies based on OS
+install_dependencies
+
+#######################################################################################################
+#                                                                                                     #
+# THE REMAINING CODE OF THIS SCRIPT IS TAKEN FROM THE BASE linuxgsm.sh SCRIPT WRITTEN BY DANIEL GIBBS #
+#                                                                                                     #
+#######################################################################################################
+
 # Project: Linux Game Server Managers - LinuxGSM
 # Author: Daniel Gibbs
 # License: MIT License, Copyright (c) 2020 Daniel Gibbs
